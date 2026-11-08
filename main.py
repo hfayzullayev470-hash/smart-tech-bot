@@ -1,5 +1,5 @@
 
-import os, threading, asyncio
+import os, threading, asyncio, json, base64
 from io import BytesIO
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types, F
@@ -24,22 +24,61 @@ client = OpenAI(api_key=GROQ_KEY.strip(), base_url="https://api.groq.com/openai/
 app = Flask(__name__)
 @app.route("/")
 def home():
-    return "Smart Tech 3.0 ishlayapti! 🤖✨"
+    return "Smart Tech 4.0 ishlayapti! 🤖✨"
 def run_flask():
     port = int(os.getenv("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
 user_lang = {}
 user_contracts = {}
-user_archives = {}  # user_id -> list of {title, text, date}
+user_archives = {}
+ARCHIVE_FILE = 'archive.json'
+def load_archive():
+    global user_archives
+    try:
+        import os as _os
+        if _os.path.exists(ARCHIVE_FILE):
+            with open(ARCHIVE_FILE, encoding='utf-8') as f:
+                d = json.load(f)
+                user_archives = {int(k): v for k,v in d.items()}
+    except Exception as e:
+        print('archive load', e)
+def save_archive():
+    try:
+        with open(ARCHIVE_FILE, 'w', encoding='utf-8') as f:
+            json.dump({str(k): v for k,v in user_archives.items()}, f, ensure_ascii=False)
+    except Exception as e:
+        print('archive save', e)
+load_archive()
+def ocr_image_bytes(data):
+    try:
+        b64 = base64.b64encode(data).decode()
+        res = client.chat.completions.create(model='meta-llama/llama-4-scout-17b-16e-instruct', messages=[{'role':'user','content':[{'type':'text','text':'Bu rasmda yozilgan hamma matnni aynan ko-chirib yoz, faqat matn.'},{'type':'image_url','image_url':{'url': 'data:image/jpeg;base64,'+b64}}]}], temperature=0.0)
+        return res.choices[0].message.content or ''
+    except Exception as e:
+        print('OCR', e)
+        return ''
+def ocr_pdf_scanned(data):
+    try:
+        doc = fitz.open(stream=data, filetype='pdf')
+        txt=''
+        for i in range(min(3, len(doc))):
+            pix = doc[i].get_pixmap(dpi=150)
+            txt += chr(10) + ocr_image_bytes(pix.tobytes('png'))
+        doc.close()
+        return txt
+    except Exception as e:
+        print('PDF OCR', e)
+        return ''
+
 
 LANGS = {
-    "uz": {"flag":"🇺🇿", "name":"O'zbek", "hello":"Salom! Men Smart Tech 3.0 man! 🤖✨", "choose":"Tilni tanla / Choose language:", "send":"📄 Faylni yubor — PDF / Word / TXT / Rasm", "reading":"📥 O'qiyapman... ⏳✨", "archive_title":"🗂️ Arxivingiz", "no_archive":"🗂️ Arxiv bo'sh! Hali fayl yubormagansan!", "help":"ℹ️ Yordam\n\n1️⃣ Fayl yubor — PDF / Word / TXT / Rasm\n2️⃣ Men tahlil qilib beraman ✨\n3️⃣ Keyin savol ber!"},
-    "ru": {"flag":"🇷🇺", "name":"Русский", "hello":"Привет! Я Smart Tech 3.0! 🤖✨", "choose":"Выбери язык / Choose language:", "send":"📄 Отправь файл — PDF / Word / TXT / Фото", "reading":"📥 Читаю... ⏳✨", "archive_title":"🗂️ Твой архив", "no_archive":"🗂️ Архив пуст!", "help":"ℹ️ Помощь\n\n1️⃣ Отправь файл\n2️⃣ Я проанализирую ✨\n3️⃣ Задавай вопросы!"},
-    "en": {"flag":"🇬🇧", "name":"English", "hello":"Hello! I'm Smart Tech 3.0! 🤖✨", "choose":"Choose language:", "send":"📄 Send file — PDF / Word / TXT / Image", "reading":"📥 Reading... ⏳✨", "archive_title":"🗂️ Your Archive", "no_archive":"🗂️ Archive is empty!", "help":"ℹ️ Help\n\n1️⃣ Send file\n2️⃣ I'll analyze ✨\n3️⃣ Ask questions!"},
-    "tr": {"flag":"🇹🇷", "name":"Türkçe", "hello":"Merhaba! Ben Smart Tech 3.0! 🤖✨", "choose":"Dil seç:", "send":"📄 Dosya gönder — PDF / Word / TXT / Resim", "reading":"📥 Okuyorum... ⏳✨", "archive_title":"🗂️ Arşivin", "no_archive":"🗂️ Arşiv boş!", "help":"ℹ️ Yardım\n\n1️⃣ Dosya gönder\n2️⃣ Analiz edeceğim ✨\n3️⃣ Soru sor!"},
-    "ar": {"flag":"🇸🇦", "name":"العربية", "hello":"مرحباً! أنا Smart Tech 3.0! 🤖✨", "choose":"اختر اللغة:", "send":"📄 أرسل ملف — PDF / Word / TXT / صورة", "reading":"📥 أقرأ... ⏳✨", "archive_title":"🗂️ أرشيفك", "no_archive":"🗂️ الأرشيف فارغ!", "help":"ℹ️ مساعدة\n\n1️⃣ أرسل ملف\n2️⃣ سأحلله ✨\n3️⃣ اسأل!"},
-    "zh": {"flag":"🇨🇳", "name":"中文", "hello":"你好！我是 Smart Tech 3.0！🤖✨", "choose":"选择语言:", "send":"📄 发送文件 — PDF / Word / TXT / 图片", "reading":"📥 正在阅读... ⏳✨", "archive_title":"🗂️ 你的存档", "no_archive":"🗂️ 存档为空！", "help":"ℹ️ 帮助\n\n1️⃣ 发送文件\n2️⃣ 我会分析 ✨\n3️⃣ 提问！"},
+    "uz": {"flag":"🇺🇿", "name":"O'zbek", "hello":"Salom! Men Smart Tech 4.0 man! 🤖✨", "choose":"Tilni tanla / Choose language:", "send":"📄 Faylni yubor — PDF / Word / TXT / Rasm", "reading":"📥 O'qiyapman... ⏳✨", "archive_title":"🗂️ Arxivingiz", "no_archive":"🗂️ Arxiv bo'sh! Hali fayl yubormagansan!", "help":"ℹ️ Yordam\n\n1️⃣ Fayl yubor — PDF / Word / TXT / Rasm\n2️⃣ Men tahlil qilib beraman ✨\n3️⃣ Keyin savol ber!"},
+    "ru": {"flag":"🇷🇺", "name":"Русский", "hello":"Привет! Я Smart Tech 4.0! 🤖✨", "choose":"Выбери язык / Choose language:", "send":"📄 Отправь файл — PDF / Word / TXT / Фото", "reading":"📥 Читаю... ⏳✨", "archive_title":"🗂️ Твой архив", "no_archive":"🗂️ Архив пуст!", "help":"ℹ️ Помощь\n\n1️⃣ Отправь файл\n2️⃣ Я проанализирую ✨\n3️⃣ Задавай вопросы!"},
+    "en": {"flag":"🇬🇧", "name":"English", "hello":"Hello! I'm Smart Tech 4.0! 🤖✨", "choose":"Choose language:", "send":"📄 Send file — PDF / Word / TXT / Image", "reading":"📥 Reading... ⏳✨", "archive_title":"🗂️ Your Archive", "no_archive":"🗂️ Archive is empty!", "help":"ℹ️ Help\n\n1️⃣ Send file\n2️⃣ I'll analyze ✨\n3️⃣ Ask questions!"},
+    "tr": {"flag":"🇹🇷", "name":"Türkçe", "hello":"Merhaba! Ben Smart Tech 4.0! 🤖✨", "choose":"Dil seç:", "send":"📄 Dosya gönder — PDF / Word / TXT / Resim", "reading":"📥 Okuyorum... ⏳✨", "archive_title":"🗂️ Arşivin", "no_archive":"🗂️ Arşiv boş!", "help":"ℹ️ Yardım\n\n1️⃣ Dosya gönder\n2️⃣ Analiz edeceğim ✨\n3️⃣ Soru sor!"},
+    "ar": {"flag":"🇸🇦", "name":"العربية", "hello":"مرحباً! أنا Smart Tech 4.0! 🤖✨", "choose":"اختر اللغة:", "send":"📄 أرسل ملف — PDF / Word / TXT / صورة", "reading":"📥 أقرأ... ⏳✨", "archive_title":"🗂️ أرشيفك", "no_archive":"🗂️ الأرشيف فارغ!", "help":"ℹ️ مساعدة\n\n1️⃣ أرسل ملف\n2️⃣ سأحلله ✨\n3️⃣ اسأل!"},
+    "zh": {"flag":"🇨🇳", "name":"中文", "hello":"你好！我是 Smart Tech 4.0！🤖✨", "choose":"选择语言:", "send":"📄 发送文件 — PDF / Word / TXT / 图片", "reading":"📥 正在阅读... ⏳✨", "archive_title":"🗂️ 你的存档", "no_archive":"🗂️ 存档为空！", "help":"ℹ️ 帮助\n\n1️⃣ 发送文件\n2️⃣ 我会分析 ✨\n3️⃣ 提问！"},
 }
 
 def lang_of(uid):
@@ -148,6 +187,12 @@ async def cmd_archive(message: types.Message):
         txt += f"{i+1}. 📄 {it['title']} — {it['date']}\n"
         kb_rows.append([InlineKeyboardButton(text=f"📄 {it['title'][:30]}", callback_data=f"open_{i}")])
     await message.answer(txt, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_rows))
+
+@dp.message(Command("delete"))
+async def cmd_delete(message: types.Message):
+    uid = message.from_user.id
+    user_archives.pop(uid, None); user_contracts.pop(uid, None); save_archive()
+    await message.answer("Arxivingiz o-chirildi!")
 
 @dp.message(Command("settings"))
 async def cmd_settings(message: types.Message):
@@ -261,15 +306,8 @@ async def qa(message: types.Message):
     await message.answer(f"💬 <b>Javob:</b>\n\n{answer[:3800]}", parse_mode="HTML")
 
 async def main():
-    await bot.set_my_commands([
-        BotCommand(command="start", description="🏠 Start / Boshlash / Başla / Start"),
-        BotCommand(command="new", description="📄 New / Yangi / Yeni"),
-        BotCommand(command="archive", description="🗂️ Archive / Arxiv / Arşiv"),
-        BotCommand(command="language", description="🌐 Language / Til / Dil"),
-        BotCommand(command="help", description="ℹ️ Help / Yordam / Yardım"),
-        BotCommand(command="settings", description="⚙️ Settings / Sozlamalar"),
-    ])
-    print("Smart Tech 3.0 ishga tushdi!")
+    await bot.delete_my_commands()
+    print("Smart Tech 4.0 ishga tushdi!")
     threading.Thread(target=run_flask, daemon=True).start()
     await dp.start_polling(bot)
 
