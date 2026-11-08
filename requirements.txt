@@ -1,9 +1,0 @@
-aiogram==3.22.0
-PyMuPDF==1.26.4
-openai==1.99.0
-Flask==3.1.2
-pydantic==2.11.7
-python-docx==1.1.2
-Pillow==11.3.0
-opencv-python-headless==4.10.0.84
-numpy==1.26.4
